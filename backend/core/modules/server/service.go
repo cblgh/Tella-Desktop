@@ -3,7 +3,10 @@ package server
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	crand "crypto/rand"
+	"strconv"
+	"strings"
+	"math/big"
 	"net"
 	"net/http"
 	"sync"
@@ -173,7 +176,14 @@ func (s *service) GetPIN() string {
 	return s.pin
 }
 
+const PIN_LEN = 6
 func generateRandomPIN() string {
-	pinNumber := 100000 + rand.Intn(900000)
-	return fmt.Sprintf("%06d", pinNumber)
+	maxN := big.NewInt(10)
+	var sequence []string
+	for i := 0; i < PIN_LEN; i++ {
+		// crypto/rand.Int cannot return an error when using crypto/rand.Reader.
+		bigN, _ := crand.Int(crand.Reader, maxN)
+		sequence = append(sequence, strconv.FormatInt(bigN.Int64(), 10))
+	}
+	return strings.Join(sequence, "")
 }
