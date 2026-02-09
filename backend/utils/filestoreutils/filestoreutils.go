@@ -192,17 +192,12 @@ func GetFileExtensionFromMimeType(mimeType string) string {
 
 	// Default case: try to extract from mimetype
 	default:
-		if strings.HasPrefix(mimeType, "image/") {
-			return ".img"
-		}
-		if strings.HasPrefix(mimeType, "video/") {
-			return ".video"
-		}
-		if strings.HasPrefix(mimeType, "audio/") {
-			return ".audio"
-		}
-		if strings.HasPrefix(mimeType, "text/") {
-			return ".txt"
+		prefixes := []string{"image/", "video/", "audio/", "text/"}
+		for _, prefix := range prefixes {
+			extractedType, success := strings.CutPrefix(mimeType, prefix)
+			if success {
+				return "." + extractedType
+			}
 		}
 		return ".file"
 	}
