@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -421,37 +420,35 @@ func (s *service) getFileIDsInFolders(folderIDs []int64) ([]int64, error) {
 		return nil, nil
 	}
 
-	// Create placeholders for SQL IN clause
-	placeholders := make([]string, len(folderIDs))
-	args := make([]interface{}, len(folderIDs))
-
-	for i, id := range folderIDs {
-		placeholders[i] = "?"
-		args[i] = id
-	}
-
-	query := fmt.Sprintf(`
+	filesInFolderQuery := `
 		SELECT id FROM files 
-		WHERE folder_id IN (%s) AND is_deleted = 0
-	`, strings.Join(placeholders, ","))
+		WHERE folder_id = ? AND is_deleted = 0
+	`
 
-	rows, err := s.db.Query(query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query file IDs: %w", err)
-	}
-	defer rows.Close()
-
+	// NOTE: we iteratively execute the static sql query to eliminate SQLi risk from dynamic query construction
+	// TODO (2026-02-09): gather up all of these queries and execute in a batch?
 	var fileIDs []int64
-	for rows.Next() {
-		var fileID int64
-		if err := rows.Scan(&fileID); err != nil {
-			return nil, fmt.Errorf("failed to scan file ID: %w", err)
+	allRows := make([]*sql.Rows, len(folderIDs))
+	for i, folderID := range folderIDs {
+		// Query creates a prepared stmt under the hood
+		rows, err := s.db.Query(filesInFolderQuery, folderID)
+		allRows[i] = rows
+		if err != nil {
+			return nil, fmt.Errorf("failed to query file IDs: %w", err)
 		}
-		fileIDs = append(fileIDs, fileID)
-	}
+		defer allRows[i].Close()
 
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating file IDs: %w", err)
+		for allRows[i].Next() {
+			var fileID int64
+			if err := allRows[i].Scan(&fileID); err != nil {
+				return nil, fmt.Errorf("failed to scan file ID: %w", err)
+			}
+			fileIDs = append(fileIDs, fileID)
+		}
+
+		if err := allRows[i].Err(); err != nil {
+			return nil, fmt.Errorf("error iterating file IDs: %w", err)
+		}
 	}
 
 	return fileIDs, nil

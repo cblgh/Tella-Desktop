@@ -289,24 +289,17 @@ func GetSelectedFilesInFolder(db *sql.DB, folderID int64, fileIDs []int64) ([]Fi
 		return nil, fmt.Errorf("no file IDs provided")
 	}
 
-	// Create placeholders for SQL IN clause
-	placeholders := make([]string, len(fileIDs))
-	args := make([]interface{}, len(fileIDs)+1)
-	args[0] = folderID
+	// to eliminate the risk of SQLi due to dynamic query construction, we split up the query into one two steps: step 1
+	// uses a static prepared sql statement to get all relevant files. step 2 does a Go-based filtering on the returned db results.
 
-	for i, id := range fileIDs {
-		placeholders[i] = "?"
-		args[i+1] = id
-	}
+	// step 1: get all the files for the given folder marked as not deleted 
+	filesInFolderQuery := `SELECT id, name, mime_type, created_at, size 
+	FROM files 
+	WHERE folder_id = ? AND is_deleted = 0 
+	ORDER BY created_at DESC`
 
-	query := fmt.Sprintf(`
-		SELECT id, name, mime_type, created_at, size 
-		FROM files 
-		WHERE folder_id = ? AND id IN (%s) AND is_deleted = 0 
-		ORDER BY created_at DESC
-	`, strings.Join(placeholders, ","))
-
-	rows, err := db.Query(query, args...)
+	// Query creates a prepared stmt under the hood
+	rows, err := db.Query(filesInFolderQuery, folderID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query selected files: %w", err)
 	}
@@ -318,7 +311,14 @@ func GetSelectedFilesInFolder(db *sql.DB, folderID int64, fileIDs []int64) ([]Fi
 		if err := rows.Scan(&file.ID, &file.Name, &file.MimeType, &file.Timestamp, &file.Size); err != nil {
 			return nil, fmt.Errorf("failed to scan file: %w", err)
 		}
-		files = append(files, file)
+		// step 2: filter retrieved files to the subset defined by fileIDs. 
+		// in this case, we only append to slice `files` if file.ID matches one of the ids in fileIDs.
+		for _, fid := range fileIDs {
+			if file.ID == fid {
+				files = append(files, file)
+				break
+			}
+		}
 	}
 
 	if err := rows.Err(); err != nil {
@@ -508,57 +508,51 @@ func GetFileMetadataForDeletion(tx *sql.Tx, ids []int64) ([]FileMetadata, error)
 		return nil, fmt.Errorf("no file IDs provided")
 	}
 
-	// Create placeholders for SQL IN clause
-	placeholders := make([]string, len(ids))
-	args := make([]interface{}, len(ids))
-
-	for i, id := range ids {
-		placeholders[i] = "?"
-		args[i] = id
-	}
-
-	query := fmt.Sprintf(`
-		SELECT id, uuid, name, size, folder_id, offset, length, created_at 
+	metadataQuery := `
+		SELECT uuid, name, size, folder_id, offset, length, created_at 
 		FROM files 
-		WHERE id IN (%s) AND is_deleted = 0
-	`, strings.Join(placeholders, ","))
+		WHERE id = ? AND is_deleted = 0
+	`
 
-	rows, err := tx.Query(query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query file metadata: %w", err)
-	}
-	defer rows.Close()
-
+	// NOTE: we iteratively execute the static sql query to eliminate SQLi risk from dynamic query construction
+	// TODO (2026-02-09): gather up all of these queries and execute in a batch?
 	var filesMetadata []FileMetadata
-	for rows.Next() {
+
+	for _, fileID := range ids {
 		var metadata FileMetadata
+		metadata.ID = fileID
 		var createdAtStr string
 
-		err := rows.Scan(
-			&metadata.ID, &metadata.UUID, &metadata.Name,
+		err := tx.QueryRow(metadataQuery, fileID).Scan(
+			&metadata.UUID, &metadata.Name,
 			&metadata.Size, &metadata.FolderID, &metadata.Offset,
 			&metadata.Length, &createdAtStr,
 		)
 
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan file metadata: %w", err)
+		// TODO cblgh(2026-02-09): decide how best to handle these errors now that we're iterating; terminating too early
+		// would be bad and risk disabling the program if a file is malformed / returns an error
+		switch {
+		case err == sql.ErrNoRows:
+			fmt.Printf("no file with id %d\n", fileID)
+		case err != nil:
+			fmt.Printf("failed to query file metadata: %w", err)
 		}
 
 		// Parse timestamp - try RFC3339 first, then fallback to SQLite format
-		createdAt, err := time.Parse(time.RFC3339, createdAtStr)
-		if err != nil {
-			createdAt, err = time.Parse("2006-01-02 15:04:05", createdAtStr)
-			if err != nil {
-				createdAt = time.Now()
+		timeFormats := []string{time.RFC3339, "2006-01-02 15:04:05"}
+		var createdAt time.Time
+		for _, timeFmt := range timeFormats {
+			createdAt, err = time.Parse(timeFmt, createdAtStr)
+			if err == nil {
+				break
 			}
+		}
+		if createdAt.IsZero() { 
+			createdAt = time.Now()
 		}
 		metadata.CreatedAt = createdAt
 
 		filesMetadata = append(filesMetadata, metadata)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating file metadata: %w", err)
 	}
 
 	return filesMetadata, nil
