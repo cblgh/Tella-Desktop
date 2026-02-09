@@ -30,7 +30,7 @@ go install github.com/wailsapp/wails/v2/cmd/wails@latest
 2. Install frontend dependencies:
 ```bash
 cd frontend
-npm install
+npm install --include=dev
 ```
 
 3. Run in development mode:
