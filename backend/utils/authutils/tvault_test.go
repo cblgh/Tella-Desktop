@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	util "Tella-Desktop/backend/utils/genericutil"
 	"Tella-Desktop/backend/utils/constants"
 )
 
@@ -15,12 +16,12 @@ import (
 func writeTVaultHeaderForTest(tvaultPath string, salt, encryptedDBKey []byte) error {
 	// Create directory if it doesn't exist
 	dir := filepath.Dir(tvaultPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, util.USER_ONLY_DIR_PERMS); err != nil {
 		return err
 	}
 
 	// Create tvault file
-	file, err := os.Create(tvaultPath)
+	file, err := util.NarrowCreate(tvaultPath)
 	if err != nil {
 		return err
 	}
@@ -229,7 +230,7 @@ func TestReadCorruptedTVault(t *testing.T) {
 	defer cleanup()
 
 	// Create a corrupted TVault file (too small)
-	file, err := os.Create(tvaultPath)
+	file, err := util.NarrowCreate(tvaultPath)
 	if err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}

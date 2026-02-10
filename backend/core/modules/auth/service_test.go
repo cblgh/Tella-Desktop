@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	util "Tella-Desktop/backend/utils/genericutil"
 	"Tella-Desktop/backend/utils/constants"
 )
 
@@ -22,12 +23,12 @@ type testService struct {
 func (s *testService) Initialize(ctx context.Context) error {
 	// Create vault directory if it doesn't exist
 	vaultDir := filepath.Dir(s.tvaultPath)
-	if err := os.MkdirAll(vaultDir, 0755); err != nil {
+	if err := os.MkdirAll(vaultDir, util.USER_ONLY_DIR_PERMS); err != nil {
 		return err
 	}
 
 	// Create temp directory
-	if err := os.MkdirAll(s.tempDir, 0755); err != nil {
+	if err := os.MkdirAll(s.tempDir, util.USER_ONLY_DIR_PERMS); err != nil {
 		return err
 	}
 
@@ -51,7 +52,7 @@ func (s *testService) CreatePassword(password string) error {
 	}
 
 	// Create a mock TVault file
-	file, err := os.Create(s.tvaultPath)
+	file, err := util.NarrowCreate(s.tvaultPath)
 	if err != nil {
 		return err
 	}

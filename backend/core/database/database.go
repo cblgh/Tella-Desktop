@@ -2,6 +2,7 @@ package database
 
 import (
 	"Tella-Desktop/backend/utils/authutils"
+	util "Tella-Desktop/backend/utils/genericutil"
 	"database/sql"
 	"encoding/hex"
 	"fmt"
@@ -19,7 +20,7 @@ type DB struct {
 func Initialize(dbPath string, key []byte) (*DB, error) {
 	// Ensure directory exists
 	dbDir := filepath.Dir(dbPath)
-	if err := os.MkdirAll(dbDir, 0755); err != nil {
+	if err := os.MkdirAll(dbDir, util.USER_ONLY_DIR_PERMS); err != nil {
 		return nil, fmt.Errorf("failed to create database directory: %v", err)
 	}
 

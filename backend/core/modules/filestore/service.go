@@ -3,6 +3,7 @@ package filestore
 import (
 	"Tella-Desktop/backend/utils/authutils"
 	"Tella-Desktop/backend/utils/filestoreutils"
+	util "Tella-Desktop/backend/utils/genericutil"
 	"context"
 	"database/sql"
 	"fmt"
@@ -64,7 +65,7 @@ func (s *service) StoreFile(folderID int64, fileName string, mimeType string, re
 	}
 
 	// Open TVault file
-	tvault, err := os.OpenFile(s.tvaultPath, os.O_RDWR, 0600)
+	tvault, err := os.OpenFile(s.tvaultPath, os.O_RDWR, util.USER_ONLY_FILE_PERMS)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open TVault: %w", err)
 	}

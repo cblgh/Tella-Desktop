@@ -10,6 +10,7 @@ import (
 
 	"Tella-Desktop/backend/utils/authutils"
 	"Tella-Desktop/backend/utils/constants"
+	util "Tella-Desktop/backend/utils/genericutil"
 
 	"github.com/matthewhartstonge/argon2"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -37,13 +38,13 @@ func (s *service) Initialize(ctx context.Context) error {
 
 	// create directory if they don't exists
 	vaultDir := filepath.Dir(s.tvaultPath)
-	if err := os.MkdirAll(vaultDir, 0755); err != nil {
+	if err := os.MkdirAll(vaultDir, util.USER_ONLY_DIR_PERMS); err != nil {
 		return fmt.Errorf("failed to create vault directory: %w", err)
 	}
 
 	// create tmp directory for decrypted files
 	tempDir := authutils.GetTempDir()
-	if err := os.MkdirAll(tempDir, 0755); err != nil {
+	if err := os.MkdirAll(tempDir, util.USER_ONLY_DIR_PERMS); err != nil {
 		return fmt.Errorf("failed to create temp directory: %w", err)
 	}
 

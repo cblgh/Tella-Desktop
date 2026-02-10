@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
+	util "Tella-Desktop/backend/utils/genericutil"
 	"github.com/adrg/xdg"
 )
 
@@ -57,7 +58,7 @@ func GetTempDir() string {
 	dir := filepath.Dir(path)
 
 	// Ensure the directory exists
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, util.USER_ONLY_DIR_PERMS); err != nil {
 		return filepath.Join(".", TempDir)
 	}
 
@@ -69,10 +70,10 @@ func GetExportDir() string {
 
 	exportDir := filepath.Join(downloadDir, TellaAppName)
 
-	if err := os.MkdirAll(exportDir, 0755); err != nil {
+	if err := os.MkdirAll(exportDir, util.USER_ONLY_DIR_PERMS); err != nil {
 		// Fallback to current directory if Downloads is not accessible
 		fallbackDir := filepath.Join(".", "exports")
-		os.MkdirAll(fallbackDir, 0755)
+		os.MkdirAll(fallbackDir, util.USER_ONLY_DIR_PERMS)
 		return fallbackDir
 	}
 

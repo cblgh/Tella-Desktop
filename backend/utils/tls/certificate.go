@@ -17,6 +17,8 @@ import (
 	"path/filepath"
 	"time"
 
+	util "Tella-Desktop/backend/utils/genericutil"
+
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -119,7 +121,7 @@ func createSignedCertificate(template *x509.Certificate, privateKey *rsa.Private
 
 func setupCertificateFiles(derBytes []byte, privateKey *rsa.PrivateKey) (*certificateFiles, error) {
 	certDir := getCertificateDirectory()
-	if err := os.MkdirAll(certDir, 0755); err != nil {
+	if err := os.MkdirAll(certDir, util.USER_ONLY_DIR_PERMS); err != nil {
 		return nil, fmt.Errorf("failed to create certificate directory: %w", err)
 	}
 
@@ -140,7 +142,7 @@ func setupCertificateFiles(derBytes []byte, privateKey *rsa.PrivateKey) (*certif
 }
 
 func writeCertificateFile(path string, derBytes []byte) error {
-	certOut, err := os.Create(path)
+	certOut, err := util.NarrowCreate(path)
 	if err != nil {
 		return fmt.Errorf("failed to create certificate file: %w", err)
 	}
@@ -153,7 +155,7 @@ func writeCertificateFile(path string, derBytes []byte) error {
 }
 
 func writePrivateKeyFile(path string, privateKey *rsa.PrivateKey) error {
-	keyOut, err := os.Create(path)
+	keyOut, err := util.NarrowCreate(path)
 	if err != nil {
 		return fmt.Errorf("failed to create key file: %w", err)
 	}

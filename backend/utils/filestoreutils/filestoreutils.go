@@ -2,6 +2,7 @@ package filestoreutils
 
 import (
 	"Tella-Desktop/backend/utils/authutils"
+	util "Tella-Desktop/backend/utils/genericutil"
 	"archive/zip"
 	"crypto/rand"
 	"crypto/sha256"
@@ -356,7 +357,7 @@ func ExportSingleFile(db *sql.DB, dbKey []byte, id int64, tvault *os.File, expor
 	exportPath := CreateUniqueFilename(exportDir, fileName)
 
 	// Create the exported file
-	exportFile, err := os.Create(exportPath)
+	exportFile, err := util.NarrowCreate(exportPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to create export file: %w", err)
 	}
@@ -369,7 +370,7 @@ func ExportSingleFile(db *sql.DB, dbKey []byte, id int64, tvault *os.File, expor
 	}
 
 	// Set appropriate file permissions
-	err = os.Chmod(exportPath, 0644)
+	err = os.Chmod(exportPath, util.USER_ONLY_FILE_PERMS)
 	if err != nil {
 		fmt.Printf("Failed to set file permissions for %s: %v", exportPath, err)
 	}
@@ -384,7 +385,7 @@ func CreateZipFile(db *sql.DB, dbKey []byte, folderName string, files []FileInfo
 	zipPath := CreateUniqueFilename(exportDir, zipFileName)
 
 	// Create ZIP file
-	zipFile, err := os.Create(zipPath)
+	zipFile, err := util.NarrowCreate(zipPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to create ZIP file: %w", err)
 	}
@@ -404,7 +405,7 @@ func CreateZipFile(db *sql.DB, dbKey []byte, folderName string, files []FileInfo
 	}
 
 	// Set appropriate file permissions
-	if err := os.Chmod(zipPath, 0644); err != nil {
+	if err := os.Chmod(zipPath, util.USER_ONLY_FILE_PERMS); err != nil {
 		fmt.Printf("Failed to set ZIP file permissions: %v", err)
 	}
 
@@ -462,7 +463,7 @@ func RecordTempFile(db *sql.DB, fileID int64, tempPath string) error {
 
 // Delete files
 func SecurelyOverwriteFileData(tvaultPath string, offset, length int64) error {
-	file, err := os.OpenFile(tvaultPath, os.O_WRONLY, 0600)
+	file, err := os.OpenFile(tvaultPath, os.O_WRONLY, util.USER_ONLY_FILE_PERMS)
 	if err != nil {
 		return fmt.Errorf("failed to open TVault for writing: %w", err)
 	}
