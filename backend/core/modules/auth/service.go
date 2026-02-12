@@ -78,22 +78,20 @@ func (s *service) CreatePassword(password string) error {
 	config := argon2.MemoryConstrainedDefaults()
 
 	raw, err := config.HashRaw([]byte(password))
+	defer argon2.SecureZeroMemory(raw.Hash)
 	if err != nil {
 		return fmt.Errorf("failed to hash password: %w", err)
 	}
 
+
 	encryptedDBKey, err := authutils.EncryptData(dbKey, raw.Hash)
 	if err != nil {
-		argon2.SecureZeroMemory(raw.Hash)
 		return fmt.Errorf("failed to encrypt database key: %w", err)
 	}
 
 	if err := authutils.InitializeTVaultHeader(raw.Salt, encryptedDBKey); err != nil {
-		argon2.SecureZeroMemory(raw.Hash)
 		return fmt.Errorf("failed to initialize tvault header: %w", err)
 	}
-
-	argon2.SecureZeroMemory(raw.Hash)
 
 	// Store database key in memory
 	s.databaseKey = dbKey
@@ -114,18 +112,16 @@ func (s *service) DecryptDatabaseKey(password string) error {
 	config := argon2.MemoryConstrainedDefaults()
 
 	raw, err := config.Hash([]byte(password), salt)
+	defer argon2.SecureZeroMemory(raw.Hash)
 	if err != nil {
 		return fmt.Errorf("failed to derive key: %w", err)
 	}
 
 	dbKey, err := authutils.DecryptData(encryptedDBKey, raw.Hash)
 	if err != nil {
-		argon2.SecureZeroMemory(raw.Hash)
 		runtime.LogInfo(s.ctx, "Invalid password")
 		return constants.ErrInvalidPassword
 	}
-
-	argon2.SecureZeroMemory(raw.Hash)
 
 	s.databaseKey = dbKey
 	s.isUnlocked = true
