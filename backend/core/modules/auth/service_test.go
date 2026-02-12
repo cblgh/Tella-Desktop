@@ -40,6 +40,18 @@ func (s *testService) IsFirstTimeSetup() bool {
 	return os.IsNotExist(err)
 }
 
+func (s *testService) ClearSession()  {
+	// Clear the database key from memory
+	if s.dbKey != nil {
+		// Zero out the key for security
+		for i := range s.dbKey {
+			s.dbKey[i] = 0
+		}
+		s.dbKey = nil
+	}
+	s.isUnlocked = false
+}
+
 func (s *testService) CreatePassword(password string) error {
 	if len(password) < 6 {
 		return constants.ErrPasswordTooShort
@@ -110,7 +122,10 @@ func setupTestEnvironment(t *testing.T) (Service, func()) {
 
 	// Return cleanup function
 	cleanup := func() {
-		os.RemoveAll(tempDir)
+		err = os.RemoveAll(tempDir)
+		if err != nil {
+			t.Fatalf("failed to clean up temp dir: %v", err)
+		}
 	}
 
 	return service, cleanup
@@ -244,6 +259,9 @@ func TestDecryptDatabaseKey(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
+		// clear previous session
+		service.ClearSession()
+
 		t.Run(tc.name, func(t *testing.T) {
 			err := service.DecryptDatabaseKey(tc.password)
 

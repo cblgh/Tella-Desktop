@@ -196,6 +196,9 @@ func (s *service) ExportFiles(ids []int64) ([]string, error) {
 
 	// Get export directory once
 	exportDir := authutils.GetExportDir()
+	if err := os.MkdirAll(exportDir, util.USER_ONLY_DIR_PERMS); err != nil {
+		return nil, fmt.Errorf("failed to create export dir: %w", err)
+	}
 
 	// Open TVault once for all operations
 	tvault, err := os.Open(s.tvaultPath)
@@ -245,6 +248,9 @@ func (s *service) ExportZipFolders(folderIDs []int64, selectedFileIDs []int64) (
 
 	var exportedPaths []string
 	exportDir := authutils.GetExportDir()
+	if err := os.MkdirAll(exportDir, util.USER_ONLY_DIR_PERMS); err != nil {
+		return nil, fmt.Errorf("failed to create export dir: %w", err)
+	}
 
 	// Open TVault once for all operations
 	tvault, err := os.Open(s.tvaultPath)
