@@ -56,6 +56,8 @@ func (h *Handler) HandlePrepare(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// TODO: cblgh(2026-02-13): wrap handler in a http.MaxBytesHandler and/or instantiate a io.LimitReader with the limit for
+// numbytes registered by prepareUpload for the given fileID / transmissionID
 func (h *Handler) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

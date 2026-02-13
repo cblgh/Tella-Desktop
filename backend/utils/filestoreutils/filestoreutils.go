@@ -342,14 +342,15 @@ func ExportSingleFile(db *sql.DB, dbKey []byte, id int64, tvault *os.File, expor
 	if err != nil {
 		return "", fmt.Errorf("failed to read file from TVault: %w", err)
 	}
+	defer util.SecureZeroMemory(encryptedData)
 
 	// Generate file key and decrypt
 	fileKey := GenerateFileKey(metadata.UUID, dbKey)
-	// TODO cblgh(2026-02-12): run argon2d.SecureZeroMemory(decryptedData)
 	decryptedData, err := authutils.DecryptData(encryptedData, fileKey)
 	if err != nil {
 		return "", fmt.Errorf("failed to decrypt file: %w", err)
 	}
+	defer util.SecureZeroMemory(decryptedData)
 
 	// Ensure filename has proper extension based on mimetype
 	fileName := EnsureFileExtension(metadata.Name, metadata.MimeType)
@@ -427,13 +428,14 @@ func AddFileToZip(db *sql.DB, dbKey []byte, zipWriter *zip.Writer, file FileInfo
 	if err != nil {
 		return fmt.Errorf("failed to read encrypted data: %w", err)
 	}
+	defer util.SecureZeroMemory(encryptedData)
 
 	fileKey := GenerateFileKey(metadata.UUID, dbKey)
-	// TODO cblgh(2026-02-12): run defer argon2d.SecureZeroMemory(decryptedData)
 	decryptedData, err := authutils.DecryptData(encryptedData, fileKey)
 	if err != nil {
 		return fmt.Errorf("failed to decrypt file: %w", err)
 	}
+	defer util.SecureZeroMemory(decryptedData)
 
 	// Ensure filename has proper extension for ZIP entry
 	fileName := EnsureFileExtension(file.Name, file.MimeType)

@@ -42,7 +42,6 @@ func (s *service) StoreFile(folderID int64, fileName string, mimeType string, re
 	// Generate UUID for the file
 	fileUUID := uuid.New().String()
 
-	// TODO cblgh(2026-02-12): run defer argon2d.SecureZeroMemory(fileData)
 	// Read the entire file into memory
 	fileData, err := io.ReadAll(reader)
 	if err != nil {
@@ -57,6 +56,10 @@ func (s *service) StoreFile(folderID int64, fileName string, mimeType string, re
 	if err != nil {
 		return nil, fmt.Errorf("failed to encrypt file: %w", err)
 	}
+	// at this point we have transformed fileData into encryptedData: erase fileData's contents.
+	util.SecureZeroMemory(fileData)
+	// while we're at it: erase encryptedData once we're done here
+	defer util.SecureZeroMemory(encryptedData)
 
 	encryptedSize := int64(len(encryptedData))
 
