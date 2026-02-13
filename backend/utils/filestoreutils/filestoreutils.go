@@ -345,6 +345,7 @@ func ExportSingleFile(db *sql.DB, dbKey []byte, id int64, tvault *os.File, expor
 
 	// Generate file key and decrypt
 	fileKey := GenerateFileKey(metadata.UUID, dbKey)
+	// TODO cblgh(2026-02-12): run argon2d.SecureZeroMemory(decryptedData)
 	decryptedData, err := authutils.DecryptData(encryptedData, fileKey)
 	if err != nil {
 		return "", fmt.Errorf("failed to decrypt file: %w", err)
@@ -428,6 +429,7 @@ func AddFileToZip(db *sql.DB, dbKey []byte, zipWriter *zip.Writer, file FileInfo
 	}
 
 	fileKey := GenerateFileKey(metadata.UUID, dbKey)
+	// TODO cblgh(2026-02-12): run defer argon2d.SecureZeroMemory(decryptedData)
 	decryptedData, err := authutils.DecryptData(encryptedData, fileKey)
 	if err != nil {
 		return fmt.Errorf("failed to decrypt file: %w", err)
@@ -437,6 +439,7 @@ func AddFileToZip(db *sql.DB, dbKey []byte, zipWriter *zip.Writer, file FileInfo
 	fileName := EnsureFileExtension(file.Name, file.MimeType)
 
 	// Create file in ZIP
+	// TODO: cblgh(2026-02-12): fileWriter is an io.Writer -- Close should be called.
 	fileWriter, err := zipWriter.Create(fileName)
 	if err != nil {
 		return fmt.Errorf("failed to create file in ZIP: %w", err)
@@ -516,7 +519,7 @@ func GetFileMetadataForDeletion(tx *sql.Tx, ids []int64) ([]FileMetadata, error)
 	`
 
 	// NOTE: we iteratively execute the static sql query to eliminate SQLi risk from dynamic query construction
-	// TODO (2026-02-09): gather up all of these queries and execute in a batch?
+	// TODO cblgh(2026-02-09): gather up all of these queries and execute in a batch?
 	var filesMetadata []FileMetadata
 
 	for _, fileID := range ids {
@@ -536,7 +539,7 @@ func GetFileMetadataForDeletion(tx *sql.Tx, ids []int64) ([]FileMetadata, error)
 		case err == sql.ErrNoRows:
 			fmt.Printf("no file with id %d\n", fileID)
 		case err != nil:
-			fmt.Printf("failed to query file metadata: %w", err)
+			fmt.Printf("failed to query file metadata: %v", err)
 		}
 
 		// Parse timestamp - try RFC3339 first, then fallback to SQLite format

@@ -42,6 +42,7 @@ func (s *service) StoreFile(folderID int64, fileName string, mimeType string, re
 	// Generate UUID for the file
 	fileUUID := uuid.New().String()
 
+	// TODO cblgh(2026-02-12): run defer argon2d.SecureZeroMemory(fileData)
 	// Read the entire file into memory
 	fileData, err := io.ReadAll(reader)
 	if err != nil {
@@ -51,6 +52,7 @@ func (s *service) StoreFile(folderID int64, fileName string, mimeType string, re
 	originalSize := int64(len(fileData))
 	fileKey := filestoreutils.GenerateFileKey(fileUUID, s.dbKey)
 
+	// TODO cblgh(2026-02-12): to overwrite fileData with encryptedData, do fileData[:0] -- but will the capacity be sufficient?
 	encryptedData, err := authutils.EncryptData(fileData, fileKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encrypt file: %w", err)
@@ -103,7 +105,6 @@ func (s *service) StoreFile(folderID int64, fileName string, mimeType string, re
 
 	fmt.Printf("Stored file %s (%s) at offset %d with size %d", fileName, fileUUID, offset, encryptedSize)
 	return metadata, nil
-
 }
 
 func (s *service) GetStoredFolders() ([]FolderInfo, error) {
@@ -433,7 +434,7 @@ func (s *service) getFileIDsInFolders(folderIDs []int64) ([]int64, error) {
 	`
 
 	// NOTE: we iteratively execute the static sql query to eliminate SQLi risk from dynamic query construction
-	// TODO (2026-02-09): gather up all of these queries and execute in a batch?
+	// TODO (2026-02-09): gather up all of these queries and execute in a batch / transaction?
 	var fileIDs []int64
 	allRows := make([]*sql.Rows, len(folderIDs))
 	for i, folderID := range folderIDs {

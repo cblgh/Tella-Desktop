@@ -11,6 +11,7 @@ var (
 	ErrTransferComplete    = errors.New("transfer already completed")
 )
 
+// TODO cblgh(2026-02-12): actually implement validation
 func ValidateUploadRequest(sessionID, transmissionID string, fileID string) error {
 	if sessionID == "" {
 		return errors.New("sessionId is required")

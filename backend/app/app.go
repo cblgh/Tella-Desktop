@@ -35,8 +35,9 @@ func (a *App) IsFirstTimeSetup() bool {
 	return a.authService.IsFirstTimeSetup()
 }
 
+// TODO cblgh(2026-02-12): authService.CreatePassword currently unlocks the database. should it?
 func (a *App) CreatePassword(password string) error {
-	err := a.authService.CreatePassword((password))
+	err := a.authService.CreatePassword(password)
 	if err != nil {
 		return err
 	}

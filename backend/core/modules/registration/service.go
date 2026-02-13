@@ -10,6 +10,7 @@ import (
 
 type service struct {
 	ctx         context.Context
+	// TODO cblgh(2026-02-12): add expiry / non-leaky behaviour; part of 024 memory leaks
 	sessions    map[string]*Session
 	pinCode     string
 	rateLimiter map[string]int

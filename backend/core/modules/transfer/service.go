@@ -17,6 +17,7 @@ import (
 
 type service struct {
 	ctx              context.Context
+	// TODO cblgh(2026-02-12): add expiry / non-leaky behaviour; part of 024 memory leaks
 	transfers        sync.Map
 	pendingTransfers sync.Map
 	fileService      filestore.Service
@@ -180,6 +181,7 @@ func (s *service) HandleUpload(sessionID, transmissionID, fileID string, reader 
 		return transferutils.ErrTransferComplete
 	}
 
+	// TODO cblgh(2026-02-12): check that fileID and transmissionID match: reject / err on mismatch
 	actualFolderID := folderID
 	if sessionValue, exists := s.transfers.Load(sessionID + "_session"); exists {
 		if session, ok := sessionValue.(*TransferSession); ok {
