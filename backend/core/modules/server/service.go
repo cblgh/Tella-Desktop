@@ -91,7 +91,15 @@ func (s *service) Start(port int) error {
 
 	mux := http.NewServeMux()
 
+	// TODO cblgh(2026-02-16): pass something (serverErrors? another channel?) to transfer's handler so that
+	// close-connection can terminate the server
 	transferHandler := transfer.NewHandler(s.transferService, s.fileService, s.defaultFolderID)
+
+	// TODO cblgh(2026-02-16): for all other paths, make sure to drain <-closeCh so that we don't have a goroutine leak
+	// go func() {
+	// 	<-closeCh
+	// 	s.Stop(context.TODO)
+	// }()
 
 	handler := NewHandler(mux, s.registrationHandler, transferHandler)
 	handler.SetupRoutes()

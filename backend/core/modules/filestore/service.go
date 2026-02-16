@@ -43,6 +43,12 @@ func (s *service) StoreFile(folderID int64, fileName string, mimeType string, re
 	fileUUID := uuid.New().String()
 
 	// Read the entire file into memory
+	// TODO cblgh(2026-02-16): when sending a ~200MB (video/quicktime) file i get a 'i/o timeout' error.
+	// this happens when i send from Tella iOS a quicktime video at the same time as a bunch of heic files.
+	// error message:
+	// Upload failed: failed to store file: failed to read file data: i/o timeout
+	// 
+	// as a piece of debugging information, it happens after ~150MB is sent.
 	fileData, err := io.ReadAll(reader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file data: %w", err)

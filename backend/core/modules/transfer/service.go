@@ -17,7 +17,6 @@ import (
 
 type service struct {
 	ctx              context.Context
-	// TODO cblgh(2026-02-12): add expiry / non-leaky behaviour; part of 024 memory leaks
 	transfers        sync.Map
 	pendingTransfers sync.Map
 	fileService      filestore.Service
@@ -34,11 +33,20 @@ type PendingTransfer struct {
 }
 
 type TransferSession struct {
-	SessionID string
-	FolderID  int64
-	Title     string
-	Files     map[string]*Transfer
+	SessionID         string
+	FolderID          int64
+	Title             string
+	FileIDs           []string
+	SeenTransmissions map[string]bool
+	ExpiresAt         time.Time
 }
+
+// timeout = 10 hours. We use a long timeout so that our fallback for cleaning up memory does not risk causing issues
+// with rare very long duration transfers. 
+// 
+// If we assume transfer speeds of [1MB/s, 6MB/s], then the chosen window gives us a transfered total payload [36GB, 216GB] in the given 10h window.
+const CLEAN_UP_SESSION_TIMEOUT_MIN = 60*10  
+const REFRESH_TIMEOUT_MIN = 45   // timeout window allows for transfers between [27GB and 162GB] for speeds [1MB/s, 6MB/s]
 
 func NewService(ctx context.Context, fileSerservice filestore.Service, db *sql.DB) Service {
 	return &service{
@@ -60,6 +68,11 @@ func (s *service) PrepareUpload(request *PrepareUploadRequest) (*PrepareUploadRe
 		CreatedAt:    time.Now(),
 	}
 
+	_, exists := s.pendingTransfers.Load(request.SessionID)
+	if exists {
+		return nil, fmt.Errorf("pending transfer already exists for session: %s", request.SessionID)
+	}
+
 	s.pendingTransfers.Store(request.SessionID, pendingTransfer)
 
 	runtime.EventsEmit(s.ctx, "prepare-upload-request", map[string]interface{}{
@@ -67,9 +80,13 @@ func (s *service) PrepareUpload(request *PrepareUploadRequest) (*PrepareUploadRe
 		"title":      request.Title,
 		"files":      request.Files,
 		"totalFiles": len(request.Files),
+		"transferredFiles": 0,
 		"totalSize":  s.calculateTotalSize(request.Files),
 	})
 
+	// Cleanup of s.pendingTransfers: select waits until one of the channels has a communication (a channel send event, in all
+	// three cases below). For all paths, we make sure that s.pendingTransfers deletes the corresponding sync.Map entry for
+	// request.SessionID.
 	select {
 	case response := <-pendingTransfer.ResponseChan:
 		s.pendingTransfers.Delete(request.SessionID)
@@ -99,23 +116,18 @@ func (s *service) AcceptTransfer(sessionID string) error {
 		return fmt.Errorf("failed to create transfer folder: %w", err)
 	}
 
-	transferSession := &TransferSession{
-		SessionID: sessionID,
-		FolderID:  folderID,
-		Title:     pendingTransfer.Title,
-		Files:     make(map[string]*Transfer),
-	}
-
+	var fileIDs[] string 
 	var responseFiles []FileTransmissionInfo
 	for _, fileInfo := range pendingTransfer.Files {
 		transmissionID := uuid.New().String()
 		transfer := &Transfer{
-			ID:        transmissionID,
+			TransmissionID: transmissionID,
 			SessionID: sessionID,
 			FileInfo:  fileInfo,
 			Status:    "pending",
 		}
 		s.transfers.Store(fileInfo.ID, transfer)
+		fileIDs = append(fileIDs, fileInfo.ID)
 
 		responseFiles = append(responseFiles, FileTransmissionInfo{
 			ID:             fileInfo.ID,
@@ -123,7 +135,26 @@ func (s *service) AcceptTransfer(sessionID string) error {
 		})
 	}
 
+	transferSession := &TransferSession{
+		SessionID: sessionID,
+		FolderID:  folderID,
+		Title:     pendingTransfer.Title,
+		FileIDs:   fileIDs,
+		SeenTransmissions: make(map[string]bool),
+		ExpiresAt: time.Now().Add(REFRESH_TIMEOUT_MIN * time.Minute),
+	}
+
 	s.transfers.Store(sessionID+"_session", transferSession)
+
+	// in the event that the session doesn't conclude properly, this fallback mitigates memory leakage by cleaning up the
+	// set s.transfers keys for all fileIDs (+ <sessionID>_session) being stored in this routine
+	go (func(fileIDs []string) {
+		<-time.After(CLEAN_UP_SESSION_TIMEOUT_MIN * time.Minute)
+		for _, fileID := range fileIDs {
+			s.ForgetTransfer(fileID)
+		}
+		fileIDs = []string{""}
+	})(fileIDs)
 
 	response := &PrepareUploadResponse{
 		Files: responseFiles,
@@ -167,6 +198,18 @@ func (s *service) GetTransfer(fileID string) (*Transfer, error) {
 	return nil, transferutils.ErrTransferNotFound
 }
 
+// ForgetTransfer removes the associated ID and any related sessionID. Returns true if the ID was in the map before being removed.
+func (s *service) ForgetTransfer(fileID string) bool {
+	v, existed := s.transfers.Load(fileID)
+	if existed {
+		if transfer, ok := v.(*Transfer); ok {
+			s.transfers.Delete(transfer.SessionID + "_session")
+		}
+	}
+	s.transfers.Delete(fileID)
+	return existed
+}
+
 func (s *service) HandleUpload(sessionID, transmissionID, fileID string, reader io.Reader, fileName string, mimeType string, folderID int64) error {
 	transfer, err := s.GetTransfer(fileID)
 	if err != nil {
@@ -181,11 +224,34 @@ func (s *service) HandleUpload(sessionID, transmissionID, fileID string, reader 
 		return transferutils.ErrTransferComplete
 	}
 
-	// TODO cblgh(2026-02-12): check that fileID and transmissionID match: reject / err on mismatch
+	// verify that file's associated transmissionID is correct
+	if transfer.TransmissionID != transmissionID {
+		return transferutils.ErrInvalidTransmission
+	}
+
 	actualFolderID := folderID
+	var ongoingSession *TransferSession
 	if sessionValue, exists := s.transfers.Load(sessionID + "_session"); exists {
 		if session, ok := sessionValue.(*TransferSession); ok {
-			actualFolderID = session.FolderID
+			ongoingSession = session
+			// transmission IDs are tied to a single file and rendered invalid after the file has been uploaded
+			if _, seen := ongoingSession.SeenTransmissions[transmissionID]; seen {
+				// reject transmission ID reuse
+				return transferutils.ErrInvalidTransmission
+			}
+			ongoingSession.SeenTransmissions[transmissionID] = true
+
+			// time-based expiry of sessions
+			// clean up session keys and return err
+			if time.Now().After(session.ExpiresAt) {
+				s.ForgetTransfer(fileID)
+				return transferutils.ErrInvalidSession
+			} else {
+				// the transfer is still valid and ongoing: refresh the expiry
+				ongoingSession.ExpiresAt = time.Now().Add(REFRESH_TIMEOUT_MIN * time.Minute)
+
+				actualFolderID = session.FolderID
+			}
 		}
 	}
 
@@ -197,14 +263,49 @@ func (s *service) HandleUpload(sessionID, transmissionID, fileID string, reader 
 	})
 
 	metadata, err := s.fileService.StoreFile(actualFolderID, fileName, mimeType, reader)
-	if err != nil {
+	transferFailed := err != nil
+
+	if transferFailed {
 		transfer.Status = "failed"
-		s.transfers.Store(fileID, transfer)
-		return fmt.Errorf("failed to store file: %w", err)
+
+		runtime.EventsEmit(s.ctx, "file-receive-failed", map[string]interface{}{
+			"sessionId": sessionID,
+			"fileId":    fileID,
+			"fileName":  fileName,
+			"fileSize":  transfer.FileInfo.Size,
+		})
+	} else {
+		transfer.Status = "completed"
+	}
+	s.transfers.Store(fileID, transfer)
+
+	// determine whether all files in a given transfer resolved (Status == {failed || completed})
+	// -> perform session clean up when this happens
+	allTransfersResolved := true
+	resolveLoop:
+	for _, fid := range ongoingSession.FileIDs {
+		if v, exists := s.transfers.Load(fid); exists {
+			if transferInfo, ok := v.(*Transfer); ok {
+				if transferInfo.Status != "completed" || transferInfo.Status != "failed" {
+					allTransfersResolved = false
+					break resolveLoop
+				}
+			}
+		}
 	}
 
-	transfer.Status = "completed"
-	s.transfers.Store(fileID, transfer)
+	// note cblgh(2026-02-16): is there ui jank that may happen if we do this cleanup immediately after the last file has been
+	// handled?
+	if allTransfersResolved {
+		for _, fid := range ongoingSession.FileIDs {
+			s.ForgetTransfer(fid)
+		}
+	}
+
+	// if we've failed & determined whether any transfers are stilkl pending, then we can ret with the err
+	if transferFailed {
+		return fmt.Errorf("failed to store file: %w", err)
+	}
 
 	runtime.EventsEmit(s.ctx, "file-received", map[string]interface{}{
 		"sessionId": sessionID,
@@ -215,6 +316,29 @@ func (s *service) HandleUpload(sessionID, transmissionID, fileID string, reader 
 
 	runtime.LogInfo(s.ctx, fmt.Sprintf("File stored successfully in folder %d. ID: %s, Name: %s", actualFolderID, metadata.UUID, metadata.Name))
 	return nil
+}
+
+func (s *service) endTransfer(sessionID string) error {
+	// TODO cblgh(2026-02-16): other than forget transfer session state, what else should we do on close connection?
+	sessionValue, exists := s.transfers.Load(sessionID + "_session")
+	if !exists {
+		return transferutils.ErrInvalidSession
+	}
+	if session, ok := sessionValue.(*TransferSession); ok {
+		for _, fileID := range session.FileIDs {
+			s.ForgetTransfer(fileID)
+		}
+	}
+	return nil
+}
+
+// TODO cblgh(2026-02-16): implement and thread cancelling from frontend back to this function 
+func (s *service) StopTransfer(sessionID string) error {
+	return s.endTransfer(sessionID)
+}
+
+func (s *service) CloseConnection(sessionID string) error {
+	return s.endTransfer(sessionID)
 }
 
 func (s *service) calculateTotalSize(files []FileInfo) int64 {

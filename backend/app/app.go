@@ -271,6 +271,15 @@ func (a *App) RejectTransfer(sessionID string) error {
 	return a.transferService.RejectTransfer(sessionID)
 }
 
+// called when a transfer is either stopped by the receipient or when it has reached a state of being finished (no
+// pending files)
+func (a *App) StopTransfer(sessionID string) error {
+	if a.transferService == nil {
+		return fmt.Errorf("transfer service not initialized")
+	}
+	return a.transferService.StopTransfer(sessionID)
+}
+
 // LockApp locks the application by closing database and clearing auth state
 func (a *App) LockApp() error {
 	// Stop the server if it's running

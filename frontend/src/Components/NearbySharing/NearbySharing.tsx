@@ -34,6 +34,7 @@ export function NearbySharing() {
     handleFileRequestReject,
     handleFileReceiving,
     handleReceiveComplete,
+    handleStopTransfer,
     handleViewFiles
   } = useNearbySharing();
 
@@ -85,11 +86,13 @@ export function NearbySharing() {
             totalSize={transferData.totalSize}
             files={transferData.files}
             onComplete={handleReceiveComplete}
+            onStop={handleStopTransfer}
           />
         )}
         
         {currentStep === 'results' && (
           <ResultsStep 
+            transferredFiles={transferData?.transferredFiles} 
             totalFiles={transferData?.totalFiles} 
             folderTitle={transferData?.title}
             onViewFiles={handleViewFiles} 

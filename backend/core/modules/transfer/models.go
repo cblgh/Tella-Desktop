@@ -3,10 +3,10 @@ package transfer
 import "errors"
 
 type Transfer struct {
-	ID        string   `json:"id"`
-	SessionID string   `json:"sessionId"`
-	FileInfo  FileInfo `json:"fileInfo"`
-	Status    string   `json:"status"`
+	TransmissionID string   `json:"transmissionId"`
+	SessionID      string   `json:"sessionId"`
+	FileInfo       FileInfo `json:"fileInfo"`
+	Status         string   `json:"status"`
 }
 
 type FileInfo struct {

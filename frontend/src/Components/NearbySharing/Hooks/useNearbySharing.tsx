@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from 'react-router-dom';
-import { GetLocalIPs, RejectRegistration, ConfirmRegistration, GetWiFiNetworkName } from "../../../../wailsjs/go/app/App";
+import { GetLocalIPs, RejectRegistration, ConfirmRegistration, GetWiFiNetworkName, StopTransfer } from "../../../../wailsjs/go/app/App";
 import { EventsOn } from "../../../../wailsjs/runtime/runtime";
 import { useServer } from "../../../Contexts/ServerContext";
 
@@ -19,6 +19,7 @@ interface TransferData {
   title: string;
   files: FileInfo[];
   totalFiles: number;
+  transferredFiles: number;
   totalSize: number;
 }
 
@@ -114,7 +115,18 @@ export function useNearbySharing() {
       setCurrentSessionId(requestData.sessionId);
     });
 
+    const cleanupFileReceived = EventsOn("file-received", () => {
+      setTransferData(prev => {
+          if (prev !== null) {
+              const newTransferData = { ...prev, transferredFiles: prev.transferredFiles + 1 }
+              return newTransferData
+          }
+          return prev
+      })
+    })
+
     return () => {
+      cleanupFileReceived();
       cleanupPingListener();
       cleanupRegisterListener();
       cleanupCertListener();
@@ -198,10 +210,18 @@ export function useNearbySharing() {
     setCurrentStep('receive');
   };
 
-  const handleReceiveComplete = () => {
+  const handleReceiveComplete = async () => {
     console.log("✅ File receiving completed");
+    // all files have been handled (either completely transferred or faile) we can close the transfer session
+    await StopTransfer(currentSessionId);
     setCurrentStep('results');
   };
+
+  const handleStopTransfer = async () => {
+    console.log("❌ File transfer stopped");
+    await StopTransfer(currentSessionId);
+    setCurrentStep('results');
+  }
 
   const handleViewFiles = async () => {
     console.log("📁 View files clicked - stopping server and navigating");
@@ -258,6 +278,7 @@ export function useNearbySharing() {
     handleFileRequestAccept,
     handleFileRequestReject,
     handleFileReceiving,
+    handleStopTransfer,
     handleReceiveComplete,
     handleViewFiles,
     

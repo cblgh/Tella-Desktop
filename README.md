@@ -84,6 +84,10 @@ The application implements the [Tella Nearby Sharing protocol](https://github.co
 - `POST /api/v1/prepare-upload` - Prepare file transfer session
 - `PUT /api/v1/upload` - File upload with binary data
 
+**Endpoints not fully implemented as of 2026-02-12:**
+
+* `POST /api/v1/close-connection`
+
 ## Platform-Specific Notes
 
 ### macOS Code Signing

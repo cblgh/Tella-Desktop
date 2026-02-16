@@ -22,6 +22,47 @@ func NewHandler(service Service, fileService filestore.Service, defaultFolder in
 	}
 }
 
+type closeInfo struct {
+	SessionID string `json:"sessionId"`
+}
+
+// TODO cblgh(2026-02-16): this route, and the methods it calls, is currently a semi-functional stub. It could do with some more work after the
+// other audit fixes are taking care of.
+func (h *Handler) HandleCloseConnection(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var info closeInfo
+	if err := json.NewDecoder(r.Body).Decode(&info); err != nil {
+		fmt.Printf("Failed to decode close connection request: %s\n", err.Error())
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	if info.SessionID == "" {
+		fmt.Printf("Close connection request did not contain sessionID")
+		http.Error(w, "No sessionID", http.StatusBadRequest)
+		return
+	}
+
+	err := h.service.CloseConnection(info.SessionID)
+	if err != nil {
+		fmt.Printf("Failure for close-connection: %s\n", err.Error())
+		http.Error(w, "Failure for close-connection", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]bool{ "success": true }); err != nil {
+		fmt.Printf("Failed to encode response: %s\n", err.Error())
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	// TODO cblgh(2026-02-16): should "close connection" ultimately also stop the https server?
+}
+
 func (h *Handler) HandlePrepare(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -85,6 +126,7 @@ func (h *Handler) HandleUpload(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Printf("Receiving file: %s (type: %s)\n", fileName, mimeType)
 
+	// TODO cblgh(2026-02-16): handle situation where transfer has been stopped & HTTPS server should be terminated
 	if err := h.service.HandleUpload(
 		sessionID,
 		transmissionID,
@@ -99,6 +141,8 @@ func (h *Handler) HandleUpload(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Transfer not found", http.StatusNotFound)
 		case transferutils.ErrInvalidSession:
 			http.Error(w, "Invalid session", http.StatusUnauthorized)
+		case transferutils.ErrInvalidTransmission:
+			http.Error(w, "Invalid transmission ID", http.StatusUnauthorized)
 		case transferutils.ErrTransferComplete:
 			http.Error(w, "Transfer already completed", http.StatusConflict)
 		default:

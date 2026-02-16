@@ -25,6 +25,7 @@ interface FileReceivingProps {
   totalSize: number;
   files: FileInfo[];
   onComplete: () => void;
+  onStop: () => void;
 }
 
 export function FileReceiving({ sessionId, 
@@ -32,10 +33,12 @@ export function FileReceiving({ sessionId,
   totalFiles, 
   totalSize, 
   files, 
-  onComplete  
+  onComplete,
+  onStop
 }: FileReceivingProps) {
   const [receivingFiles, setReceivingFiles] = useState<FileReceivingData[]>([]);
   const [completedFiles, setCompletedFiles] = useState<FileReceivingData[]>([]);
+  const [failedFiles, setFailedFiles] = useState<FileReceivingData[]>([]);
   const [receivedSize, setReceivedSize] = useState(0);
 
   // Initialize receiving files from props
@@ -98,14 +101,41 @@ export function FileReceiving({ sessionId,
                 return newSize;
               });
             }
-            
-            console.log(`Progress: ${newCompleted.length}/${totalFiles} files completed`);
-            if (newCompleted.length === totalFiles && totalFiles > 0) {
+
+            console.log(`Progress: ${failedFiles.length + newCompleted.length}/${totalFiles} files completed`);
+            if ((failedFiles.length + newCompleted.length) === totalFiles && totalFiles > 0) {
               console.log("🎉 All files completed!");
+              // TODO cblgh(2026-02-16): call down to the backend for a new fn "CleanupTransfer / AllFilesResolved". 
               setTimeout(() => onComplete(), 1000);
             }
-            
             return newCompleted;
+          }
+          return prev;
+        });
+      }
+    });
+
+    // Listen for file upload failure events
+    const cleanupFailed = EventsOn("file-receive-failed", (data) => {
+      console.log("❌ File failed:", data);
+      const fileData = data as FileReceivingData;
+      
+      if (fileData.sessionId === sessionId) {
+        console.log("❌ File failed for our session:", fileData);
+        
+        // Move from receiving to failed
+        setReceivingFiles(prev => prev.filter(f => f.fileId !== fileData.fileId));
+        setFailedFiles(prev => {
+          const exists = prev.some(f => f.fileId === fileData.fileId);
+          if (!exists) {
+            const newFailed = [...prev, fileData];
+            
+            if ((newFailed.length + completedFiles.length) === totalFiles && totalFiles > 0) {
+              console.log("🎉 All files completed!");
+              // TODO cblgh(2026-02-16): call down to the backend for a new fn "CleanupTransfer / AllFilesResolved". 
+              setTimeout(() => onComplete(), 1000);
+            }
+            return newFailed;
           }
           return prev;
         });
@@ -124,6 +154,7 @@ export function FileReceiving({ sessionId,
       
     });
 
+    // TODO cblgh(2026-02-16): event that is currently unused?
     // Listen for transfer cancellation
     const cleanupCancel = EventsOn("transfer-cancelled", (data) => {
       console.log("❌ Transfer cancelled:", data);
@@ -140,6 +171,7 @@ export function FileReceiving({ sessionId,
       console.log("🧹 Cleaning up FileReceiving event listeners");
       cleanupReceiving();
       cleanupReceived();
+      cleanupFailed();
       cleanupProgress();
       cleanupCancel();
     };
@@ -157,7 +189,8 @@ export function FileReceiving({ sessionId,
 
   const handleCancelTransfer = () => {
     console.log("Cancel transfer requested for session:", sessionId);
-    onComplete();
+    // TODO cblgh(2026-02-16): bubble up call to backend for ending the transfer
+    onStop();
   };
 
   return (

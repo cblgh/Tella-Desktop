@@ -1,12 +1,13 @@
 import styled from 'styled-components';
 
 interface ResultsStepProps {
+  transferredFiles: number | undefined;
   totalFiles: number | undefined;
   folderTitle: string | undefined;
   onViewFiles: () => void;
 }
 
-export function ResultsStep({ totalFiles, folderTitle, onViewFiles }: ResultsStepProps) {
+export function ResultsStep({ transferredFiles, totalFiles, folderTitle, onViewFiles }: ResultsStepProps) {
   return (
     <DeviceInfoCard>
       <ResultHeaderContainer>
@@ -15,7 +16,7 @@ export function ResultsStep({ totalFiles, folderTitle, onViewFiles }: ResultsSte
       <ResultContent>
         <StepTitle>Success!</StepTitle>
         <StepSubtitle>
-          {totalFiles} files were successfully received and saved to the folder {folderTitle}
+          {transferredFiles} out of {totalFiles} files were successfully received and saved to the folder {folderTitle}
         </StepSubtitle>
       </ResultContent>
       <ButtonContainer>

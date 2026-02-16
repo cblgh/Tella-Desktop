@@ -82,6 +82,10 @@ export function StopServer() {
   return window['go']['app']['App']['StopServer']();
 }
 
+export function StopTransfer(arg1) {
+  return window['go']['app']['App']['StopTransfer'](arg1);
+}
+
 export function VerifyPassword(arg1) {
   return window['go']['app']['App']['VerifyPassword'](arg1);
 }

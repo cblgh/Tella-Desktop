@@ -43,4 +43,6 @@ export function StartServer(arg1:number):Promise<void>;
 
 export function StopServer():Promise<void>;
 
+export function StopTransfer(arg1:string):Promise<void>;
+
 export function VerifyPassword(arg1:string):Promise<void>;
