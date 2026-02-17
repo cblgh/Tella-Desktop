@@ -50,7 +50,7 @@ func (h *Handler) HandleCloseConnection(w http.ResponseWriter, r *http.Request) 
 	err := h.service.CloseConnection(info.SessionID)
 	if err != nil {
 		fmt.Printf("Failure for close-connection: %s\n", err.Error())
-		http.Error(w, "Failure for close-connection", http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 
@@ -109,6 +109,8 @@ func (h *Handler) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	transmissionID := r.URL.Query().Get("transmissionId")
 	fileID := r.URL.Query().Get("fileId")
 
+	// TODO cblgh(2026-02-17): pass enough information to ValidateUploadRequest that it can actually perform validation
+	// or remove the function entirely (it is basically unused)
 	if err := transferutils.ValidateUploadRequest(sessionID, transmissionID, fileID); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

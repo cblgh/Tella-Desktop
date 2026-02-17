@@ -7,7 +7,8 @@ type Service interface {
 	AcceptTransfer(sessionID string) error
 	RejectTransfer(sessionID string) error
 	CloseConnection(sessionID string) error
-	StopTransfer(sessionID string) error
 	HandleUpload(sessionID, transmissionID, fileID string, reader io.Reader, fileName string, mimeType string, folderID int64) error
 	GetTransfer(fileID string) (*Transfer, error)
+	StopTransfer(sessionID string)
+	Lock()
 }

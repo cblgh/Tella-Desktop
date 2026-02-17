@@ -34,8 +34,12 @@ export function ServerProvider({ children }: ServerProviderProps) {
 
   const startServer = useCallback(async (): Promise<boolean> => {
     if (serverStateRef.current.isRunning || serverStateRef.current.isStarting) {
-      console.log('Server already running or starting');
-      return serverStateRef.current.isRunning;
+      if (serverStateRef.current.isRunning) {
+          console.log("Server is already running");
+      } else if (serverStateRef.current.isStarting) {
+          console.log("Server is starting up");
+      }
+      return serverStateRef.current.isRunning || serverStateRef.current.isStarting;
     }
 
     try {

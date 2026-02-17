@@ -212,11 +212,16 @@ export function useNearbySharing() {
 
   const handleReceiveComplete = async () => {
     console.log("✅ File receiving completed");
-    // all files have been handled (either completely transferred or faile) we can close the transfer session
+    // all files have been handled (either completely transferred or failed) we can close the transfer session
     await StopTransfer(currentSessionId);
+    // the file receiving is complete, stop the server
+    if (serverRunning) {
+      await handleStopServer();
+    }
     setCurrentStep('results');
   };
 
+  // called when "stop transfer" is clicked in the middle of an ongoing transfer
   const handleStopTransfer = async () => {
     console.log("❌ File transfer stopped");
     await StopTransfer(currentSessionId);

@@ -95,7 +95,7 @@ func (s *service) Start(port int) error {
 	// close-connection can terminate the server
 	transferHandler := transfer.NewHandler(s.transferService, s.fileService, s.defaultFolderID)
 
-	// TODO cblgh(2026-02-16): for all other paths, make sure to drain <-closeCh so that we don't have a goroutine leak
+	// TODO cblgh(2026-02-16): if using channel for close-connection then make sure, for all other paths, to drain <-closeCh so that we don't have a goroutine leak
 	// go func() {
 	// 	<-closeCh
 	// 	s.Stop(context.TODO)
@@ -108,6 +108,8 @@ func (s *service) Start(port int) error {
 		Addr:         fmt.Sprintf(":%d", port),
 		Handler:      mux,
 		TLSConfig:    tlsConfig,
+		// TODO cblgh(2026-02-16): verify that ReadTimeout is what is causing the timeout behaviour after having received
+		// ~150MB out of a 200MB large file
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,

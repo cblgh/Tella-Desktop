@@ -42,7 +42,7 @@ func (a *App) CreatePassword(password string) error {
 		return err
 	}
 
-	if err := a.initializeDatabase(); err != nil {
+	if err := a.initializeServices(); err != nil {
 		runtime.LogError(a.ctx, "Failed to initialize database during setup: "+err.Error())
 		return err
 	}
@@ -60,7 +60,7 @@ func (a *App) VerifyPassword(password string) error {
 
 	// Initialize database after successful password verification
 	if a.db == nil {
-		if err := a.initializeDatabase(); err != nil {
+		if err := a.initializeServices(); err != nil {
 			runtime.LogError(a.ctx, "Failed to initialize database after login: "+err.Error())
 			return err
 		}
@@ -83,9 +83,6 @@ func (a *App) Startup(ctx context.Context) {
 		runtime.LogFatalf(ctx, "Failed to initialize auth service: %v", err)
 		return
 	}
-
-	a.registrationService = registration.NewService(a.ctx)
-	a.registrationHandler = registration.NewHandler(a.registrationService, a.ctx)
 }
 
 func (a *App) ConfirmRegistration() error {
@@ -103,7 +100,10 @@ func (a *App) RejectRegistration() error {
 }
 
 // Helper method to initialize the database with encryption
-func (a *App) initializeDatabase() error {
+func (a *App) initializeServices() error {
+	a.registrationService = registration.NewService(a.ctx)
+	a.registrationHandler = registration.NewHandler(a.registrationService, a.ctx)
+
 	// Get database key from auth service
 	dbKey, err := a.authService.GetDBKey()
 	if err != nil {
@@ -132,7 +132,11 @@ func (a *App) initializeDatabase() error {
 	a.fileService = filestore.NewService(a.ctx, db.DB, dbKey)
 	runtime.LogInfo(a.ctx, "File storage service initialized")
 
-	a.transferService = transfer.NewService(a.ctx, a.fileService, db.DB)
+	// we pass the transfer service two functions from registration in:
+	// 1. registration.SessionIsValid, in order to check if an incoming session ID matches what was saved during the register step
+	// 2. registration.ForgetSession, which mitigates memory leaks by being called as part of the transfer service's
+	//    session management cleanup
+	a.transferService = transfer.NewService(a.ctx, a.fileService, db.DB, a.registrationService.SessionIsValid, a.registrationService.ForgetSession)
 	runtime.LogInfo(a.ctx, "Transfer service initialized")
 
 	// Re-initialize transfer and server services with filestore service
@@ -277,7 +281,8 @@ func (a *App) StopTransfer(sessionID string) error {
 	if a.transferService == nil {
 		return fmt.Errorf("transfer service not initialized")
 	}
-	return a.transferService.StopTransfer(sessionID)
+	a.transferService.StopTransfer(sessionID)
+	return nil
 }
 
 // LockApp locks the application by closing database and clearing auth state
@@ -296,6 +301,10 @@ func (a *App) LockApp() error {
 		runtime.LogInfo(a.ctx, "Database connection closed for lock")
 	}
 
+	// call lock on services with long-running goroutines for clearing memory to release any long-lived references &&
+	// clear held memory
+	a.transferService.Lock()
+	a.registrationService.Lock()
 	// Clear services that depend on database
 	a.fileService = nil
 	a.transferService = nil
