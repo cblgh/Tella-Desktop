@@ -259,6 +259,10 @@ func (s *service) PreUploadValidation(sessionID, transmissionID, fileID string) 
 }
 
 func (s *service) HandleUpload(sessionID, transmissionID, fileID string, reader io.Reader, fileName string, mimeType string, folderID int64) error {
+	err := s.PreUploadValidation(sessionID, transmissionID, fileID)
+	if err != nil {
+		return err
+	}
 	transfer, err := s.GetTransfer(fileID)
 	if err != nil {
 		return err
@@ -304,7 +308,20 @@ func (s *service) HandleUpload(sessionID, transmissionID, fileID string, reader 
 	// acknowledgement ({ success: true }) until the file has been properly stored and encrypted -- which can take quite a
 	// bit of time for large files. this forces the sender to keep the application open while nothing useful is happening
 	// on their side
-	metadata, err := s.fileService.StoreFile(actualFolderID, fileName, mimeType, reader)
+
+	// NOTE cblgh(2026-02-19): LimitReader returns an EOF, which signals the end of reading activities for io.ReadAll or
+	// io.Copy. this means that we will only read exactly as many bytes as the sender has told us this file size is! if
+	// the file size is incorrectly stated, we will not read or save "the full file". coupled with the sha256 hashes we
+	// can detect any such issues. 
+	// limit reading of the response to the claimed filesize. reading more bytes than the claimed size will return an error
+	fmt.Println("fileName is", fileName, "claimed size", transfer.FileInfo.Size)
+	// limitReader := io.LimitReader(reader, transfer.FileInfo.Size)
+
+
+	// NOTE cblgh(2026-02-19): running into a bug when uploading a large file as part of many other files; something to the effect of 
+	// what is described here https://github.com/googleapis/google-cloud-go/issues/987
+	// and somewhat detailed in https://github.com/golang/go/issues/26338
+	metadata, err := s.fileService.StoreFile(actualFolderID, transfer.FileInfo.Size, fileName, mimeType, reader)
 	transferFailed := err != nil
 
 	if transferFailed {

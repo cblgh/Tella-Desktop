@@ -128,10 +128,15 @@ func (h *Handler) HandleUpload(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Printf("Receiving file: %s (type: %s)\n", fileName, mimeType)
 
-	if err := h.service.PreUploadValidation(
+	// TODO cblgh(2026-02-16): handle situation where transfer has been stopped & HTTPS server should be terminated
+	if err := h.service.HandleUpload(
 		sessionID,
 		transmissionID,
 		fileID,
+		r.Body,
+		fileName,
+		mimeType,
+		h.defaultFolder,
 	); err != nil {
 		switch err {
 		case transferutils.ErrTransferNotFound:
@@ -143,24 +148,9 @@ func (h *Handler) HandleUpload(w http.ResponseWriter, r *http.Request) {
 		case transferutils.ErrTransferComplete:
 			http.Error(w, "Transfer already completed", http.StatusConflict)
 		default:
-			fmt.Printf("Upload failed: %s\n", err.Error())
+			fmt.Printf("\nUpload failed: %s\n", err.Error())
 			http.Error(w, "Failed to store file", http.StatusInternalServerError)
 		}
-		return
-	}
-
-	// TODO cblgh(2026-02-16): handle situation where transfer has been stopped & HTTPS server should be terminated
-	if err := h.service.HandleUpload(
-		sessionID,
-		transmissionID,
-		fileID,
-		r.Body,
-		fileName,
-		mimeType,
-		h.defaultFolder,
-	); err != nil {
-		fmt.Printf("Upload failed: %s\n", err.Error())
-		http.Error(w, "Failed to store file", http.StatusInternalServerError)
 		return
 	}
 

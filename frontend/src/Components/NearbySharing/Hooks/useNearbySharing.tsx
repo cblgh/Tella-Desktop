@@ -224,7 +224,12 @@ export function useNearbySharing() {
   // called when "stop transfer" is clicked in the middle of an ongoing transfer
   const handleStopTransfer = async () => {
     console.log("❌ File transfer stopped");
+    // stop the http server
+    if (serverRunning) {
+      await handleStopServer();
+    }
     await StopTransfer(currentSessionId);
+    // TODO cblgh(2026-02-19): set currentStep to results-error?
     setCurrentStep('results');
   }
 

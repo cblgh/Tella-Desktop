@@ -31,7 +31,7 @@ func NewService(ctx context.Context, db *sql.DB, dbKey []byte) Service {
 }
 
 // StoreFile encrypts and stores a file in TVault
-func (s *service) StoreFile(folderID int64, fileName string, mimeType string, reader io.Reader) (*FileMetadata, error) {
+func (s *service) StoreFile(folderID, claimedSize int64, fileName string, mimeType string, reader io.Reader) (*FileMetadata, error) {
 	// Begin Transaction
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -50,11 +50,16 @@ func (s *service) StoreFile(folderID int64, fileName string, mimeType string, re
 	// 
 	// as a piece of debugging information, it happens after ~150MB is sent.
 	fileData, err := io.ReadAll(reader)
+	fmt.Println("filestore err?", fileName, err)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file data: %w", err)
 	}
 
 	originalSize := int64(len(fileData))
+	fmt.Println("filestore", fileName, "read size", originalSize)
+	if originalSize != claimedSize {
+		return nil, fmt.Errorf("file %q: downloaded size (%d) did not match claimed size (%d) from prepareUpload (difference: %d)", fileName, originalSize, claimedSize, originalSize - claimedSize)
+	}
 	fileKey := filestoreutils.GenerateFileKey(fileUUID, s.dbKey)
 
 	// TODO cblgh(2026-02-12): to overwrite fileData with encryptedData, do fileData[:0] -- but will the capacity be sufficient?
@@ -112,7 +117,7 @@ func (s *service) StoreFile(folderID int64, fileName string, mimeType string, re
 		CreatedAt: time.Now(),
 	}
 
-	fmt.Printf("Stored file %s (%s) at offset %d with size %d", fileName, fileUUID, offset, encryptedSize)
+	fmt.Printf("Stored file %s (%s) at offset %d with size (encrypted) %d\n", fileName, fileUUID, offset, encryptedSize)
 	return metadata, nil
 }
 
