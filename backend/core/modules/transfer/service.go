@@ -233,7 +233,7 @@ func (s *service) ForgetTransfer(fileID string) bool {
 	return existed
 }
 
-func (s *service) HandleUpload(sessionID, transmissionID, fileID string, reader io.Reader, fileName string, mimeType string, folderID int64) error {
+func (s *service) PreUploadValidation(sessionID, transmissionID, fileID string) error {
 	if !s.sessionIsValid(sessionID) {
 		return transferutils.ErrInvalidSession
 	}
@@ -255,7 +255,14 @@ func (s *service) HandleUpload(sessionID, transmissionID, fileID string, reader 
 	if transfer.TransmissionID != transmissionID {
 		return transferutils.ErrInvalidTransmission
 	}
+	return nil
+}
 
+func (s *service) HandleUpload(sessionID, transmissionID, fileID string, reader io.Reader, fileName string, mimeType string, folderID int64) error {
+	transfer, err := s.GetTransfer(fileID)
+	if err != nil {
+		return err
+	}
 	actualFolderID := folderID
 	var ongoingSession *TransferSession
 	if sessionValue, exists := s.transfers.Load(sessionID + "_session"); exists {
@@ -290,6 +297,13 @@ func (s *service) HandleUpload(sessionID, transmissionID, fileID string, reader 
 		"fileSize":  transfer.FileInfo.Size,
 	})
 
+	// NOTE cblgh(2026-02-19): is desktop's current architecture for transfer's handler + service unnecessarily
+	// blocking senders?
+	//
+	// if the sender's last file has been fully transmitted (all bytes received), the sender will not receive an
+	// acknowledgement ({ success: true }) until the file has been properly stored and encrypted -- which can take quite a
+	// bit of time for large files. this forces the sender to keep the application open while nothing useful is happening
+	// on their side
 	metadata, err := s.fileService.StoreFile(actualFolderID, fileName, mimeType, reader)
 	transferFailed := err != nil
 
@@ -328,7 +342,7 @@ func (s *service) HandleUpload(sessionID, transmissionID, fileID string, reader 
 		s.endTransfer(sessionID)
 	}
 
-	// if we've failed & determined whether any transfers are stilkl pending, then we can ret with the err
+	// if we've failed & determined whether any transfers are still pending, then we can ret with the err
 	if transferFailed {
 		return fmt.Errorf("failed to store file: %w", err)
 	}
@@ -345,7 +359,6 @@ func (s *service) HandleUpload(sessionID, transmissionID, fileID string, reader 
 }
 
 func (s *service) endTransfer(sessionID string) {
-	// TODO cblgh(2026-02-16): other than forget transfer session state, what else should we do on close connection?
 	sessionValue, exists := s.transfers.Load(sessionID + "_session")
 	if exists {
 		if session, ok := sessionValue.(*TransferSession); ok {
@@ -362,7 +375,6 @@ func (s *service) endTransfer(sessionID string) {
 	s.done = make(chan struct{})
 }
 
-// TODO cblgh(2026-02-16): implement and thread cancelling from frontend back to this function 
 func (s *service) StopTransfer(sessionID string) {
 	s.endTransfer(sessionID)
 }
@@ -371,6 +383,7 @@ func (s *service) CloseConnection(sessionID string) error {
 	if !s.sessionIsValid(sessionID) {
 		return transferutils.ErrInvalidSession
 	}
+	// TODO cblgh(2026-02-16): other than forget transfer session state, what else should we do on close connection?
 	s.endTransfer(sessionID)
 	return nil
 }
