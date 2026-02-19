@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"time"
-	"fmt"
 
 	"Tella-Desktop/backend/utils/constants"
 	"github.com/google/uuid"

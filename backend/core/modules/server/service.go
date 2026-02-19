@@ -95,11 +95,13 @@ func (s *service) Start(port int) error {
 	// close-connection can terminate the server
 	transferHandler := transfer.NewHandler(s.transferService, s.fileService, s.defaultFolderID)
 
-	// TODO cblgh(2026-02-16): if using channel for close-connection then make sure, for all other paths, to drain <-closeCh so that we don't have a goroutine leak
+	// TODO (2026-02-19): dhekra / iOS closes the server when the transfer is explicitly stopped
+	// TODO cblgh(2026-02-16): if using channel for close-connection then make sure, for all other paths, to drain <-done so that we don't have a goroutine leak
 	// go func() {
-	// 	<-closeCh
+	// 	<-done
 	// 	s.Stop(context.TODO)
 	// }()
+
 
 	handler := NewHandler(mux, s.registrationHandler, transferHandler)
 	handler.SetupRoutes()
@@ -110,9 +112,10 @@ func (s *service) Start(port int) error {
 		TLSConfig:    tlsConfig,
 		// TODO cblgh(2026-02-16): verify that ReadTimeout is what is causing the timeout behaviour after having received
 		// ~150MB out of a 200MB large file
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		ReadTimeout:  0, // do not time out when reading body -- we will potentially be receiving multi gigabyte uploads
+		ReadHeaderTimeout: 0, //30 * time.Second, // this configures timeouts on the header portion of each request, which should be small :)
+		WriteTimeout: 0,
+		IdleTimeout:  0,
 	}
 
 	s.port = port
