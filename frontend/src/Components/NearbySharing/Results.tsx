@@ -1,11 +1,32 @@
 import styled from 'styled-components';
 
+import { sanitizeUGC } from "../../util/util"
+
 interface ResultsStepProps {
   transferredFiles: number | undefined;
   totalFiles: number | undefined;
   folderTitle: string | undefined;
   onViewFiles: () => void;
 }
+
+// TODO cblgh(2026-02-19): implement the error versions of this screen
+//
+// check icon is an exclamation mark
+//
+// Title: Transfer interrupted
+// Message: x files were successfully received but an error interrupted the transfer and y files were not received.
+//
+// Received files are in the folder %q.
+//
+// buttons: [<icon> try again] [icon view files]
+
+// version for 0 files received:
+//
+// Title: Transfer interrupted
+// Message: An error interrupted the transfer and no files were received.
+//
+// buttons: [<icon> try again]
+//
 
 export function ResultsStep({ transferredFiles, totalFiles, folderTitle, onViewFiles }: ResultsStepProps) {
   return (
@@ -16,7 +37,7 @@ export function ResultsStep({ transferredFiles, totalFiles, folderTitle, onViewF
       <ResultContent>
         <StepTitle>Success!</StepTitle>
         <StepSubtitle>
-          {transferredFiles} out of {totalFiles} files were successfully received and saved to the folder {folderTitle}
+          {transferredFiles} out of {totalFiles} files were successfully received and saved to the folder {sanitizeUGC(folderTitle || "Folder")}
         </StepSubtitle>
       </ResultContent>
       <ButtonContainer>

@@ -32,6 +32,7 @@ import {
 import { Dialog } from '../Dialog/Dialog';
 import { LoadingDialog } from '../Dialog/LoadingDialog';
 import { SuccessToast } from '../Toast/SuccessToast';
+import { sanitizeUGC } from "../../util/util"
 
 interface FolderInfo {
   id: number
@@ -312,7 +313,7 @@ export function FolderList() {
                 </CheckboxCell>
                 <NameCell>
                   <FolderIcon />
-                  <FolderName>{folder.name}</FolderName>
+                  <FolderName>{sanitizeUGC(folder.name)}</FolderName>
                 </NameCell>
                 <FilesCell>{folder.fileCount} files</FilesCell>
                 <DateCell>{formatTimestamp(folder.timestamp)}</DateCell>

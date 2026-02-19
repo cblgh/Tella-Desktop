@@ -6,6 +6,8 @@ import folderIcon from '../../assets/images/icons/folder-icon.svg'
 import downloadIcon from '../../assets/images/icons/download-icon.svg'
 import clockIcon from '../../assets/images/icons/clock-icon.svg'
 
+import { sanitizeUGC } from "../../util/util"
+
 interface FileInfo {
   id: string;
   fileName: string;
@@ -115,7 +117,7 @@ export function FileRequest({ onAccept, onReject, onReceiving }: FileRequestProp
       <TransferCard>
         <TransferNameContainer>
           <FolderIcon />
-          <TransferTitle>{requestData.title}</TransferTitle>
+          <TransferTitle>{sanitizeUGC(requestData.title)}</TransferTitle>
         </TransferNameContainer>
         <TransferStats>
           {requestData.totalFiles} files

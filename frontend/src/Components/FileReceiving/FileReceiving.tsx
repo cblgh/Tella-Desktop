@@ -3,6 +3,8 @@ import { EventsOn } from '../../../wailsjs/runtime/runtime';
 import styled, { keyframes } from 'styled-components';
 import folderIcon from '../../assets/images/icons/folder-icon.svg'
 
+import { sanitizeUGC } from "../../util/util"
+
 interface FileReceivingData {
   sessionId: string;
   fileId: string;
@@ -204,7 +206,7 @@ export function FileReceiving({ sessionId,
         <TransferHeader>
           <TransferName>
             <FolderIcon/>
-            <TransferText>{transferTitle}</TransferText>
+            <TransferText>{sanitizeUGC(transferTitle)}</TransferText>
           </TransferName>
            <ProgressText>
             {Math.min(currentFileNumber, totalFiles)}/{totalFiles} files
