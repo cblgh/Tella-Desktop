@@ -59,8 +59,13 @@ func (s *service) IsFirstTimeSetup() bool {
 }
 
 func (s *service) CreatePassword(password string) error {
-	if len(password) < 6 {
+	if len(password) < constants.PasswordMinLength {
 		return constants.ErrPasswordTooShort
+	}
+
+	// basic input invalidation to prevent attacks that overflow memory somehow
+	if len(password) > constants.PasswordMaxLength {
+		return constants.ErrPasswordTooLong
 	}
 
 	//generate random database key | TODO: move this outside of this function
@@ -103,6 +108,11 @@ func (s *service) CreatePassword(password string) error {
 
 func (s *service) DecryptDatabaseKey(password string) error {
 	runtime.LogInfo(s.ctx, "Verifying password")
+
+	// basic input invalidation to prevent attacks that overflow memory somehow
+	if len(password) > constants.PasswordMaxLength {
+		return constants.ErrPasswordTooLong
+	}
 
 	salt, encryptedDBKey, err := authutils.ReadTVaultHeader()
 	if err != nil {
