@@ -9,6 +9,7 @@ import (
 
 type NonceManager struct {
 	// seen[nonce] -> []byte{1}
+	seen *lru.Cache
 }
 
 const CAPACITY_BYTES = 100000000 // max bytes of memory to use before evicting entries
